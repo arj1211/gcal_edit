@@ -1,0 +1,12 @@
+[project]
+name = "gcal-edit"
+version = "0.1.0"
+description = "A simple yet powerful command-line tool for managing special dates like birthdays and anniversaries. The application integrates with Google Calendar to add, list, edit, and delete events, and provides functionality to import and export dates to and from CSV files. It automatically creates a dedicated calendar for these events and sets up annual reminders."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google-api-python-client>=2.183.0",
+    "google-auth>=2.40.3",
+    "google-auth-oauthlib>=1.2.2",
+    "pandas>=2.3.2",
+]
