@@ -108,7 +108,8 @@ def export_dates_to_csv(manager, calendar_id):
     """Handles the 'Export special dates to CSV' option."""
     print("\n--- Export Special Dates ---")
     file_path = get_user_input(
-        "Enter the filename to export to (default is 'special_dates.csv')"
+        "Enter the filename to export to (default is 'special_dates.csv')",
+        required=False,
     )
     manager.export_to_csv(calendar_id, file_path or "special_dates.csv")
 
@@ -117,7 +118,8 @@ def import_dates_from_csv(manager, calendar_id):
     """Handles the 'Import special dates from CSV' option."""
     print("\n--- Import Special Dates ---")
     file_path = get_user_input(
-        "Enter the filename to import from (default is 'special_dates.csv')"
+        "Enter the filename to import from (default is 'special_dates.csv')",
+        required=False,
     )
     manager.import_from_csv(calendar_id, file_path or "special_dates.csv")
 

@@ -125,6 +125,27 @@ class CalendarManager:
             print(f"Error retrieving event ID {event_id}: {e}")
             return None
 
+    def event_exists(self, calendar_id, event_id):
+        """
+        Checks if an event with the given ID exists in the calendar.
+
+        Args:
+            calendar_id (str): The ID of the calendar.
+            event_id (str): The ID of the event to check.
+        Returns:
+            bool: True if the event exists, False otherwise.
+        """
+        if not event_id or pd.isna(event_id):
+            return False
+
+        try:
+            self.service.events().get(
+                calendarId=calendar_id, eventId=event_id
+            ).execute()  # pyright: ignore[reportAttributeAccessIssue]
+            return True
+        except Exception:
+            return False
+
     def add_event(self, calendar_id, summary, date, description=None):
         """
         Adds a single, all-day event to the calendar with recurring annual reminders.
@@ -235,6 +256,7 @@ class CalendarManager:
     def import_from_csv(self, calendar_id, file_path):
         """
         Imports events from a CSV file into a calendar.
+        Skips events that already exist if an 'id' column is present in the CSV.
 
         Args:
             calendar_id (str): The ID of the calendar.
@@ -246,13 +268,32 @@ class CalendarManager:
                 print("CSV file is empty. Nothing to import.")
                 return
 
+            added_count = 0
+            skipped_count = 0
+            has_id_column = "id" in df.columns
+
             for _, row in df.iterrows():
                 summary = row["summary"]
                 date = row["date"]
                 description = row["description"]
-                self.add_event(calendar_id, summary, date, description)
 
-            print(f"Successfully imported {len(df)} events from {file_path}")
+                # Check if event already exists (if ID is provided)
+                if has_id_column:
+                    event_id = row.get("id")
+                    if self.event_exists(calendar_id, event_id):
+                        print(
+                            f'Event "{summary}" (ID: {event_id}) already exists. Skipping.'
+                        )
+                        skipped_count += 1
+                        continue
+
+                # Add the event
+                self.add_event(calendar_id, summary, date, description)
+                added_count += 1
+
+            print(
+                f"Import completed: {added_count} events added, {skipped_count} events skipped (already exist)"
+            )
         except FileNotFoundError:
             print(f"Error: The file {file_path} was not found.")
         except Exception as e:
