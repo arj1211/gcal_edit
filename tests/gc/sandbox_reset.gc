@@ -1,0 +1,16 @@
+# Sandbox reset script
+# - ensure sandbox calendars exist
+# - delete every event found between the two calendars (filtered by 2025)
+calendar['gcal-edit-sandbox'] > create
+  | set name = gcal-edit-sandbox
+  | set verb = create
+calendar['gcal-edit-archive'] > create
+  | set name = gcal-edit-archive
+  | set verb = create
+
+calendar['gcal-edit-sandbox'] > events
+  | where start >= 2025-01-01
+> delete
+calendar['gcal-edit-archive'] > events
+  | where start >= 2025-01-01
+> delete

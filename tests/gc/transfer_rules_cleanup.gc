@@ -1,0 +1,25 @@
+# Transfer + rules + sandbox-to-archive cleanup
+# - filter December events and transfer from sandbox -> archive, deleting from source
+# - update destination rules (recurrence/reminders, description template)
+# - run export/import cycle on archive to ensure CSV respects new rules
+# - clean up by deleting everything in both calendars
+calendar['gcal-edit-sandbox'] > events
+  | where start >= 2025-12-01
+  | where end <= 2025-12-31
+  | set delete_source = true
+> transfer to calendar['gcal-edit-archive']
+  | set recurrence = monthly
+  | set reminders = 2 weeks, 1 day
+  | set description = 'Transferred via DSL stress test'
+
+calendar['gcal-edit-archive'] > rules
+> set-rules
+  | set recurrence = yearly
+  | set reminders = 2 weeks, 1 day
+  | set description_template = 'Archived via DSL'
+> export to 'archive_export.csv'
+> delete
+> import from 'archive_export.csv'
+calendar['gcal-edit-archive'] > events
+  | where name contains 'Transferred via DSL stress test'
+> delete
