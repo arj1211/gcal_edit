@@ -1,16 +1,24 @@
 import os
 import pickle
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import Resource, build
 
-# Google Calendar API setup from gauth.py
+# Google Calendar API scopes
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
+DEFAULT_TIMEZONE = "UTC"
+DEFAULT_REMINDERS = [
+    {"method": "popup", "minutes": 14 * 24 * 60},  # 2 weeks
+    {"method": "popup", "minutes": 2 * 24 * 60},  # 2 days
+    {"method": "popup", "minutes": 0},
+]
+DEFAULT_RECURRENCE = ["RRULE:FREQ=YEARLY"]
 
 
-def authenticate_google_calendar():
+def authenticate_google_calendar() -> Resource:
     creds = None
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
@@ -27,274 +35,440 @@ def authenticate_google_calendar():
 
 
 class CalendarManager:
-    """
-    Manages interactions with the Google Calendar API, including creating calendars,
-    and handling events.
-    """
+    """Calendar helpers shared by the CLI and Textual UI."""
 
     def __init__(self, service: Resource) -> None:
         self.service = service
 
-    def list_calendars(self):
-        """Lists all calendars for the authenticated user."""
-        return self.service.calendarList().list().execute()  # pyright: ignore[reportAttributeAccessIssue]
+    def _collect_pages(
+        self,
+        method: Callable[..., Any],
+        *,
+        items_key: str = "items",
+        max_results: Optional[int] = None,
+        **params: Any,
+    ) -> List[Dict[str, Any]]:
+        accumulated: List[Dict[str, Any]] = []
+        page_token = params.pop("pageToken", None)
+        while True:
+            call_params = {k: v for k, v in params.items() if v is not None}
+            if page_token:
+                call_params["pageToken"] = page_token
+            response = method(**call_params).execute()
+            page_items = response.get(items_key, [])
+            if max_results:
+                remaining = max_results - len(accumulated)
+                if remaining <= 0:
+                    return accumulated[:max_results]
+                page_items = page_items[:remaining]
+            accumulated.extend(page_items)
+            if max_results and len(accumulated) >= max_results:
+                return accumulated[:max_results]
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+        return accumulated
 
-    def get_calendar_id_by_name(self, name):
-        """
-        Finds a calendar by its summary name and returns its ID.
+    def list_calendars(
+        self,
+        *,
+        max_results: Optional[int] = 250,
+        min_access_role: Optional[str] = None,
+        show_hidden: bool = False,
+        show_deleted: bool = False,
+        sync_token: Optional[str] = None,
+        time_zone: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {
+            "minAccessRole": min_access_role,
+            "showHidden": show_hidden,
+            "showDeleted": show_deleted,
+            "syncToken": sync_token,
+            "timeZone": time_zone,
+        }
+        if max_results:
+            params["maxResults"] = max_results
+        return self._collect_pages(
+            self.service.calendarList().list,
+            items_key="items",
+            **{k: v for k, v in params.items() if v is not None},
+        )
 
-        Args:
-            name (str): The summary name of the calendar.
-        Returns:
-            str: The ID of the found calendar, or None if not found.
-        """
+    def list_calendars_incremental(
+        self,
+        sync_token: str,
+        *,
+        min_access_role: Optional[str] = None,
+        show_hidden: bool = False,
+        show_deleted: bool = False,
+        time_zone: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        params: Dict[str, Any] = {
+            "syncToken": sync_token,
+            "minAccessRole": min_access_role,
+            "showHidden": show_hidden,
+            "showDeleted": show_deleted,
+            "timeZone": time_zone,
+        }
+        response = (
+            self.service.calendarList()
+            .list(**{k: v for k, v in params.items() if v is not None})
+            .execute()
+        )
+        return response.get("items", []), response.get("nextSyncToken")
+
+    def get_calendar_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         try:
-            for item in self.list_calendars()["items"]:
-                if item["summary"] == name:
-                    return item["id"]
-        except Exception as e:
-            print(f"Error listing calendars: {e}")
-        return None
+            return next(
+                item
+                for item in self.list_calendars()
+                if item.get("summary", "").lower() == name.lower()
+            )
+        except StopIteration:
+            return None
 
-    def find_or_create_calendar(self, name):
-        """
-        Finds a calendar by name. If it doesn't exist, it creates a new one
-        and applies the specified reminder rules.
+    def ensure_calendar(
+        self,
+        name: str,
+        time_zone: str = DEFAULT_TIMEZONE,
+        reminders: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        calendar = self.get_calendar_by_name(name)
+        if calendar:
+            return calendar.get("id")
 
-        Args:
-            name (str): The name of the calendar to find or create.
-        Returns:
-            str: The ID of the calendar.
-        """
-        calendar_id = self.get_calendar_id_by_name(name)
-        if calendar_id:
-            print(f'Found existing calendar "{name}".')
-            return calendar_id
-        else:
-            print(f'Calendar "{name}" not found. Creating a new one...')
-            calendar = {
-                "summary": name,
-                "timeZone": "America/New_York",  # Change to your local time zone
-            }
-            created_calendar = self.service.calendars().insert(body=calendar).execute()  # pyright: ignore[reportAttributeAccessIssue]
+        calendar_body = {"summary": name, "timeZone": time_zone}
+        created_calendar = self.service.calendars().insert(body=calendar_body).execute()
+        calendar_id = created_calendar.get("id")
 
-            # Set the reminder rules for the new calendar
-            reminders = {
-                "useDefault": False,
-                "overrides": [
-                    {"method": "popup", "minutes": 14 * 24 * 60},  # 2 weeks
-                    {"method": "popup", "minutes": 2 * 24 * 60},  # 2 days
-                    {"method": "popup", "minutes": 0},  # Same day at 9 AM
-                ],
-            }
-            # Update the calendar with the reminders
-            self.service.calendarList().update(  # pyright: ignore[reportAttributeAccessIssue]
-                calendarId=created_calendar["id"],
-                body={"defaultReminders": reminders["overrides"]},
+        if calendar_id and reminders:
+            self.service.calendarList().update(
+                calendarId=calendar_id, body={"defaultReminders": reminders}
             ).execute()
+        return calendar_id
 
-            print(f'Successfully created calendar "{name}".')
-            return created_calendar["id"]
+    def list_events(
+        self,
+        calendar_id: str,
+        *,
+        max_results: Optional[int] = 5000,
+        time_min: Optional[str] = None,
+        time_max: Optional[str] = None,
+        single_events: bool = False,
+        order_by: Optional[str] = None,
+        query: Optional[str] = None,
+        show_deleted: bool = False,
+        show_hidden_invitations: bool = False,
+        i_cal_uid: Optional[str] = None,
+        updated_min: Optional[str] = None,
+        sync_token: Optional[str] = None,
+        time_zone: Optional[str] = None,
+        always_include_email: bool = False,
+    ) -> List[Dict[str, Any]]:
+        if sync_token and updated_min:
+            raise ValueError("sync_token cannot be combined with updated_min")
+        params: Dict[str, Any] = {
+            "timeMin": time_min,
+            "timeMax": time_max,
+            "singleEvents": single_events,
+            "orderBy": order_by,
+            "q": query,
+            "showDeleted": show_deleted,
+            "showHiddenInvitations": show_hidden_invitations,
+            "iCalUID": i_cal_uid,
+            "updatedMin": updated_min,
+            "syncToken": sync_token,
+            "timeZone": time_zone,
+            "alwaysIncludeEmail": always_include_email,
+        }
+        if max_results:
+            params["maxResults"] = max_results
+        return self._collect_pages(
+            self.service.events().list,
+            items_key="items",
+            max_results=max_results,
+            calendarId=calendar_id,
+            **{k: v for k, v in params.items() if v is not None},
+        )
 
-    def list_events(self, calendar_id):
-        """
-        Lists all events from a given calendar.
+    def list_events_page(
+        self,
+        calendar_id: str,
+        *,
+        max_results: Optional[int] = None,
+        page_token: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Tuple[List[Dict[str, Any]], Optional[str], Optional[str]]:
+        params: Dict[str, Any] = {"calendarId": calendar_id}
+        if max_results:
+            params["maxResults"] = max_results
+        if page_token:
+            params["pageToken"] = page_token
+        params.update({k: v for k, v in kwargs.items() if v is not None})
+        response = self.service.events().list(**params).execute()
+        return (
+            response.get("items", []),
+            response.get("nextPageToken"),
+            response.get("nextSyncToken"),
+        )
 
-        Args:
-            calendar_id (str): The ID of the calendar.
-        Returns:
-            list: A list of events.
-        """
-        try:
-            return self.service.events().list(calendarId=calendar_id).execute()["items"]  # pyright: ignore[reportAttributeAccessIssue]
-        except Exception as e:
-            print(f"Error listing events for calendar ID {calendar_id}: {e}")
-            return []
-
-    def get_event(self, calendar_id, event_id):
-        """
-        Retrieves a single event by its ID.
-        """
+    def get_event(self, calendar_id: str, event_id: str) -> Optional[Dict[str, Any]]:
         try:
             return (
-                self.service.events()  # pyright: ignore[reportAttributeAccessIssue]
+                self.service.events()
                 .get(calendarId=calendar_id, eventId=event_id)
                 .execute()
             )
-        except Exception as e:
-            print(f"Error retrieving event ID {event_id}: {e}")
+        except Exception as exc:
+            print(f"Error retrieving event {event_id}: {exc}")
             return None
 
-    def event_exists(self, calendar_id, event_id):
-        """
-        Checks if an event with the given ID exists in the calendar.
-
-        Args:
-            calendar_id (str): The ID of the calendar.
-            event_id (str): The ID of the event to check.
-        Returns:
-            bool: True if the event exists, False otherwise.
-        """
+    def event_exists(self, calendar_id: str, event_id: Optional[str]) -> bool:
         if not event_id or pd.isna(event_id):
             return False
-
         try:
             self.service.events().get(
                 calendarId=calendar_id, eventId=event_id
-            ).execute()  # pyright: ignore[reportAttributeAccessIssue]
+            ).execute()
             return True
         except Exception:
             return False
 
-    def add_event(self, calendar_id, summary, date, description=None):
-        """
-        Adds a single, all-day event to the calendar with recurring annual reminders.
+    def _clean_for_copy(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {
+            "summary": event.get("summary"),
+            "description": event.get("description"),
+            "start": event.get("start"),
+            "end": event.get("end"),
+            "recurrence": event.get("recurrence"),
+            "reminders": event.get("reminders"),
+        }
+        return {key: value for key, value in payload.items() if value is not None}
 
-        Args:
-            calendar_id (str): The ID of the calendar.
-            summary (str): The summary/title of the event.
-            date (str): The date of the event in 'YYYY-MM-DD' format.
-            description (str, optional): A description for the event.
-        """
-        event = {
+    def _create_event_payload(
+        self,
+        summary: str,
+        date: str,
+        description: Optional[str],
+        recurrence: Optional[List[str]],
+        reminders: Optional[List[Dict[str, Any]]],
+    ) -> Dict[str, Any]:
+        event_payload = {
             "summary": summary,
             "start": {"date": date},
             "end": {"date": date},
             "description": description,
-            "recurrence": ["RRULE:FREQ=YEARLY"],
-            "reminders": {
-                "useDefault": True,
-            },
         }
+        if recurrence:
+            event_payload["recurrence"] = recurrence
+        if reminders:
+            event_payload["reminders"] = {"useDefault": False, "overrides": reminders}
+        return event_payload
 
+    def add_event(
+        self,
+        calendar_id: str,
+        summary: str,
+        date: str,
+        description: Optional[str] = None,
+        recurrence: Optional[List[str]] = None,
+        reminders: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[str]:
+        event_payload = self._create_event_payload(
+            summary=summary,
+            date=date,
+            description=description,
+            recurrence=recurrence or DEFAULT_RECURRENCE,
+            reminders=reminders or DEFAULT_REMINDERS,
+        )
         try:
-            self.service.events().insert(calendarId=calendar_id, body=event).execute()  # pyright: ignore[reportAttributeAccessIssue]
-            print(f'Successfully added event "{summary}" on {date}.')
-        except Exception as e:
-            print(f"Error adding event: {e}")
+            created_event = (
+                self.service.events()
+                .insert(calendarId=calendar_id, body=event_payload)
+                .execute()
+            )
+            return created_event.get("id")
+        except Exception as exc:
+            print(f"Error adding event '{summary}': {exc}")
+            return None
 
     def update_event(
-        self, calendar_id, event_id, summary=None, date=None, description=None
-    ):
-        """
-        Updates an existing event with new details.
-
-        Args:
-            calendar_id (str): The ID of the calendar.
-            event_id (str): The ID of the event to update.
-            summary (str, optional): The new summary.
-            date (str, optional): The new date in 'YYYY-MM-DD' format.
-            description (str, optional): The new description.
-        """
+        self,
+        calendar_id: str,
+        event_id: str,
+        summary: Optional[str] = None,
+        date: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> bool:
         event = self.get_event(calendar_id, event_id)
         if not event:
-            return
+            return False
 
         if summary:
             event["summary"] = summary
         if date:
-            event["start"]["date"] = date
-            event["end"]["date"] = date
-        if description:
+            event.setdefault("start", {})["date"] = date
+            event.setdefault("end", {})["date"] = date
+        if description is not None:
             event["description"] = description
 
         try:
-            self.service.events().update(  # pyright: ignore[reportAttributeAccessIssue]
+            self.service.events().update(
                 calendarId=calendar_id, eventId=event_id, body=event
             ).execute()
-            print(f"Successfully updated event ID {event_id}.")
-        except Exception as e:
-            print(f"Error updating event ID {event_id}: {e}")
+            return True
+        except Exception as exc:
+            print(f"Error updating event {event_id}: {exc}")
+            return False
 
-    def delete_event(self, calendar_id, event_id):
-        """
-        Deletes an event from the calendar.
-
-        Args:
-            calendar_id (str): The ID of the calendar.
-            event_id (str): The ID of the event to delete.
-        """
+    def delete_event(self, calendar_id: str, event_id: str) -> bool:
         try:
-            self.service.events().delete(  # pyright: ignore[reportAttributeAccessIssue]
+            self.service.events().delete(
                 calendarId=calendar_id, eventId=event_id
             ).execute()
-            print(f"Successfully deleted event ID {event_id}.")
-        except Exception as e:
-            print(f"Error deleting event ID {event_id}: {e}")
+            return True
+        except Exception as exc:
+            print(f"Error deleting event {event_id}: {exc}")
+            return False
 
-    def export_to_csv(self, calendar_id, file_path):
-        """
-        Exports all events from a calendar to a CSV file.
+    def transfer_event(
+        self,
+        source_calendar_id: str,
+        dest_calendar_id: str,
+        event_id: str,
+        delete_source: bool = False,
+    ) -> Optional[str]:
+        event = self.get_event(source_calendar_id, event_id)
+        if not event:
+            return None
+        payload = self._clean_for_copy(event)
+        try:
+            inserted_event = (
+                self.service.events()
+                .insert(calendarId=dest_calendar_id, body=payload)
+                .execute()
+            )
+            if delete_source:
+                self.delete_event(source_calendar_id, event_id)
+            return inserted_event.get("id")
+        except Exception as exc:
+            print(f"Error transferring event {event_id}: {exc}")
+            return None
 
-        Args:
-            calendar_id (str): The ID of the calendar.
-            file_path (str): The path to the CSV file.
-        """
+    def export_to_csv(self, calendar_id: str, file_path: str) -> bool:
         try:
             events = self.list_events(calendar_id)
             if not events:
                 print("No events to export.")
-                return
+                return False
+            data = [
+                {
+                    "id": event.get("id"),
+                    "summary": event.get("summary"),
+                    "date": event.get("start", {}).get("date"),
+                    "description": event.get("description"),
+                }
+                for event in events
+            ]
+            pd.DataFrame(data).to_csv(file_path, index=False)
+            return True
+        except Exception as exc:
+            print(f"Error exporting events: {exc}")
+            return False
 
-            data = []
-            for event in events:
-                data.append(
-                    {
-                        "id": event.get("id"),
-                        "summary": event.get("summary", "N/A"),
-                        "date": event.get("start", {}).get("date", "N/A"),
-                        "description": event.get("description", "N/A"),
-                    }
-                )
-
-            df = pd.DataFrame(data)
-            df.to_csv(file_path, index=False)
-            print(f"Successfully exported {len(events)} events to {file_path}")
-        except Exception as e:
-            print(f"Error exporting events: {e}")
-
-    def import_from_csv(self, calendar_id, file_path):
-        """
-        Imports events from a CSV file into a calendar.
-        Skips events that already exist if an 'id' column is present in the CSV.
-
-        Args:
-            calendar_id (str): The ID of the calendar.
-            file_path (str): The path to the CSV file.
-        """
+    def import_from_csv(
+        self,
+        calendar_id: str,
+        file_path: str,
+        recurrence: Optional[List[str]] = None,
+        reminders: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, int]:
+        stats = {"added": 0, "skipped": 0}
         try:
             df = pd.read_csv(file_path)
             if df.empty:
-                print("CSV file is empty. Nothing to import.")
-                return
-
-            added_count = 0
-            skipped_count = 0
+                return stats
             has_id_column = "id" in df.columns
-
             for _, row in df.iterrows():
-                summary = row["summary"]
-                date = row["date"]
-                description = row["description"]
-
-                # Check if event already exists (if ID is provided)
-                if has_id_column:
-                    event_id = row.get("id")
-                    if self.event_exists(calendar_id, event_id):
-                        print(
-                            f'Event "{summary}" (ID: {event_id}) already exists. Skipping.'
-                        )
-                        skipped_count += 1
-                        continue
-
-                # Add the event
-                self.add_event(calendar_id, summary, date, description)
-                added_count += 1
-
-            print(
-                f"Import completed: {added_count} events added, {skipped_count} events skipped (already exist)"
-            )
+                summary = row.get("summary")
+                date = row.get("date")
+                description = row.get("description")
+                if not summary or not date:
+                    stats["skipped"] += 1
+                    continue
+                if has_id_column and self.event_exists(calendar_id, row.get("id")):
+                    stats["skipped"] += 1
+                    continue
+                if self.add_event(
+                    calendar_id,
+                    summary,
+                    date,
+                    description=description,
+                    recurrence=recurrence,
+                    reminders=reminders,
+                ):
+                    stats["added"] += 1
+            return stats
         except FileNotFoundError:
-            print(f"Error: The file {file_path} was not found.")
-        except Exception as e:
-            print(f"Error importing events: {e}")
+            print(f"Error: {file_path} not found.")
+            return stats
+        except Exception as exc:
+            print(f"Error importing events: {exc}")
+            return stats
+
+    def batch_edit_from_csv(
+        self,
+        calendar_id: str,
+        file_path: str,
+        recurrence: Optional[List[str]] = None,
+        reminders: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, int]:
+        stats = {"added": 0, "updated": 0, "deleted": 0, "skipped": 0}
+        try:
+            df = pd.read_csv(file_path)
+            if df.empty:
+                return stats
+            for _, row in df.iterrows():
+                action = str(row.get("action", "")).strip().lower()
+                event_id = row.get("id")
+                summary = row.get("summary")
+                date = row.get("date")
+                description = row.get("description")
+                if action == "add":
+                    if not summary or not date:
+                        stats["skipped"] += 1
+                        continue
+                    if self.add_event(
+                        calendar_id,
+                        summary,
+                        date,
+                        description=description,
+                        recurrence=recurrence,
+                        reminders=reminders,
+                    ):
+                        stats["added"] += 1
+                elif action == "update":
+                    if event_id and self.update_event(
+                        calendar_id,
+                        event_id,
+                        summary=summary,
+                        date=date,
+                        description=description,
+                    ):
+                        stats["updated"] += 1
+                    else:
+                        stats["skipped"] += 1
+                elif action == "delete":
+                    if event_id and self.delete_event(calendar_id, event_id):
+                        stats["deleted"] += 1
+                    else:
+                        stats["skipped"] += 1
+                else:
+                    stats["skipped"] += 1
+            return stats
+        except FileNotFoundError:
+            print(f"Error: {file_path} not found.")
+            return stats
+        except Exception as exc:
+            print(f"Error during batch edit: {exc}")
+            return stats
