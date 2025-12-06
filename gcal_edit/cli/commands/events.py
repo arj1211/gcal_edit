@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, List
 
-from dsl_filters import filter_events
+from gcal_edit.dsl.filters import filter_events
 
 if TYPE_CHECKING:
-    from cli.calendar_cli import CalendarCLI
+    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 
 def handle_events(cli: "CalendarCLI", args: List[str]) -> None:

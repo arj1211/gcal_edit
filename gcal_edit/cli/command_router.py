@@ -1,19 +1,23 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, List
+from typing import TYPE_CHECKING, Callable, Dict, List
 
-from cli.commands.calendars import handle_calendars, handle_select
-from cli.commands.create import handle_create
-from cli.commands.csv import handle_batch, handle_export, handle_import
-from cli.commands.event_crud import (
+from gcal_edit.cli.commands.calendars import handle_calendars, handle_select
+from gcal_edit.cli.commands.create import handle_create
+from gcal_edit.cli.commands.csv import handle_batch, handle_export, handle_import
+from gcal_edit.cli.commands.event_crud import (
     handle_add,
     handle_delete,
     handle_edit,
     handle_transfer,
 )
-from cli.commands.events import handle_events
-from cli.commands.help import handle_help
-from cli.commands.rules import handle_rules, handle_set_rules
+from gcal_edit.cli.commands.events import handle_events
+from gcal_edit.cli.commands.help import handle_help
+from gcal_edit.cli.commands.rules import handle_rules, handle_set_rules
+from gcal_edit.cli.commands.script import handle_script
+
+if TYPE_CHECKING:
+    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 COMMANDS: Dict[str, str] = {
     "calendars": "List available calendars",
@@ -29,6 +33,7 @@ COMMANDS: Dict[str, str] = {
     "import": "Import events from CSV",
     "batch": "Run a batch CSV action",
     "create": "Create a new calendar",
+    "script": "Run a DSL script",
     "help": "Show this command list",
     "quit": "Exit the CLI",
 }
@@ -49,5 +54,6 @@ COMMAND_HANDLERS: Dict[str, Handler] = {
     "import": handle_import,
     "batch": handle_batch,
     "create": handle_create,
+    "script": handle_script,
     "help": handle_help,
 }

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, List
 
-from calendar_service import DEFAULT_TIMEZONE
+from gcal_edit.service.calendar_service import DEFAULT_TIMEZONE
 
 if TYPE_CHECKING:
-    from cli.calendar_cli import CalendarCLI
+    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 
 def handle_create(cli: "CalendarCLI", args: List[str]) -> None:

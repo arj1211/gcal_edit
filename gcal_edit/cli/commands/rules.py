@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from cli.calendar_cli import CalendarCLI
+    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 
 def handle_rules(cli: "CalendarCLI", args: List[str]) -> None:

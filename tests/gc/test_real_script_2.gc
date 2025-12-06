@@ -1,0 +1,3 @@
+calendar['Default'] > events
+  | where name match '(?i)anniversary'
+> delete

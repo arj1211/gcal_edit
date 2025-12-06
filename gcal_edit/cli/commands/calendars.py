@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
-    from cli.calendar_cli import CalendarCLI
+    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 
 def handle_calendars(cli: "CalendarCLI", args: List[str]) -> None:
@@ -26,7 +26,7 @@ def handle_select(cli: "CalendarCLI", args: List[str]) -> None:
     cli.selected_calendar_name = chosen.get("summary", "Unnamed")
     print(f"Selected calendar: {cli.selected_calendar_name}")
     cli.refresh_events()
-    from cli.commands.rules import handle_rules
+    from gcal_edit.cli.commands.rules import handle_rules
 
     handle_rules(cli, [])
 

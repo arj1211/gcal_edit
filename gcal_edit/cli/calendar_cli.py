@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from calendar_rules import CalendarRulesManager
-from calendar_service import CalendarManager, authenticate_google_calendar
-from cli.command_router import COMMAND_HANDLERS
+from gcal_edit.cli.command_router import COMMAND_HANDLERS
+from gcal_edit.dsl import DSLInterpreter
+from gcal_edit.service.calendar_rules import CalendarRulesManager
+from gcal_edit.service.calendar_service import (
+    CalendarManager,
+    authenticate_google_calendar,
+)
 
 
 class CalendarCLI:
@@ -21,6 +26,7 @@ class CalendarCLI:
         self.selected_calendar_name: str = ""
         self.events: List[Dict[str, Any]] = []
         self.last_command_remainder: str = ""
+        self.dsl = DSLInterpreter()
         self.refresh_calendar_list()
 
     def refresh_calendar_list(self) -> None:
@@ -51,6 +57,14 @@ class CalendarCLI:
         prompt = f"{label}" + (f" [{default}]" if default else "") + ": "
         value = input(prompt).strip()
         return value if value else (default or "")
+
+    def run_script(self, script_path: Path) -> None:
+        try:
+            self.dsl.run(script_path)
+        except FileNotFoundError:
+            print(f"Script file not found: {script_path}")
+        except Exception as exc:
+            print(f"Unable to run script {script_path}: {exc}")
 
     def run(self) -> None:
         print("Google Calendar CLI (type help for commands)")

@@ -1,0 +1,4 @@
+calendar['Default'] > events
+  | where name match '(?i)anniversary'
+> transfer calendar['CoupleCal']
+  | set reminders = 0 day
