@@ -7,6 +7,7 @@ from gcal_edit.dsl.filters import filter_events
 from gcal_edit.dsl.helpers import (
     create_reminder,
     normalize_recurrence,
+    parse_duration_string,
     parse_reminder_minutes,
 )
 from gcal_edit.dsl.types import DSLAction, ExecutionContext
@@ -40,6 +41,13 @@ def handle_transfer(
     if not target:
         print("Transfer action requires a target calendar.")
         return
+
+    if context.dry_run:
+        print(
+            f"[Dry Run] Would transfer {len(context.filtered_events)} events to {target}"
+        )
+        return
+
     target_id = interpreter.resolve_calendar(target)
     if not target_id:
         target_id = interpreter.manager.ensure_calendar(
@@ -59,22 +67,6 @@ def handle_transfer(
         )
         if result:
             print(f"Transferred event {event_id} to {target}")
-    recurrence_value = action.assignments.get("recurrence")
-    reminders_value = action.assignments.get("reminders")
-    if recurrence_value or reminders_value:
-        reminder_minutes = (
-            parse_reminder_minutes(reminders_value) if reminders_value else None
-        )
-        recurrence_list = (
-            normalize_recurrence(recurrence_value) if recurrence_value else None
-        )
-        interpreter.rules.set_rule(
-            target_id,
-            target,
-            recurrence=recurrence_list,
-            reminder_minutes=reminder_minutes,
-        )
-        print(f"Updated rules for {target} after transfer.")
 
 
 def handle_add(
@@ -88,15 +80,30 @@ def handle_add(
     description = action.assignments.get("description")
     recurrence_value = action.assignments.get("recurrence")
     reminders_value = action.assignments.get("reminders")
-    recurrence = normalize_recurrence(recurrence_value)
-    reminder_minutes = (
-        parse_reminder_minutes(reminders_value) if reminders_value else None
-    )
-    reminders = (
-        [create_reminder(minutes) for minutes in reminder_minutes]
-        if reminder_minutes
-        else None
-    )
+
+    if recurrence_value:
+        recurrence = normalize_recurrence(recurrence_value)
+    else:
+        recurrence = None
+
+    if reminders_value:
+        reminder_minutes = parse_reminder_minutes(reminders_value)
+        reminders = [create_reminder(minutes) for minutes in reminder_minutes]
+    else:
+        reminders = None
+
+    if context.dry_run:
+        print(
+            f"[Dry Run] Would add event '{summary}' on {date_value} to {context.calendar_name}"
+        )
+        if description:
+            print(f"          Description: {description}")
+        if recurrence:
+            print(f"          Recurrence: {recurrence}")
+        if reminders:
+            print(f"          Reminders: {reminders}")
+        return
+
     event_id = interpreter.manager.add_event(
         context.calendar_id,
         summary,
@@ -112,41 +119,106 @@ def handle_add(
 def handle_series(
     interpreter: "DSLInterpreter", action: DSLAction, context: ExecutionContext
 ) -> None:
-    clean_keys = {"offsets", "interval_days", "count", "verb"}
+    clean_keys = {"offsets", "interval_days", "count", "verb", "idx"}
     assignment = {k: v for k, v in action.assignments.items() if k not in clean_keys}
-    base = assignment.get("start")
-    if not base:
-        print("Series action requires a start date.")
+
+    # Determine base date and direction
+    start_val = assignment.get("start")
+    end_val = assignment.get("end") or assignment.get("deadline")
+
+    if start_val:
+        try:
+            base_date = date.fromisoformat(start_val)
+            direction = 1
+        except ValueError:
+            print(f"Invalid start date for series: {start_val}")
+            return
+    elif end_val:
+        try:
+            base_date = date.fromisoformat(end_val)
+            direction = -1
+        except ValueError:
+            print(f"Invalid end/deadline date for series: {end_val}")
+            return
+    else:
+        print("Series action requires a start date or end/deadline date.")
         return
-    try:
-        base_date = date.fromisoformat(base)
-    except ValueError:
-        print(f"Invalid start date for series: {base}")
-        return
+
+    # Parse offsets or interval
     offsets_value = action.assignments.get("offsets")
     interval_value = action.assignments.get("interval_days")
     count_value = action.assignments.get("count")
-    offsets: List[int] = []
+    idx_value = action.assignments.get("idx")
+
+    offsets: List[timedelta] = []
+    indices: List[Any] = []
+
+    if idx_value:
+        # Parse idx list like "(1, 2, 3)" or "1,2,3"
+        raw_idx = idx_value.strip()
+        if raw_idx.startswith("(") and raw_idx.endswith(")"):
+            raw_idx = raw_idx[1:-1]
+        indices = [i.strip() for i in raw_idx.split(",") if i.strip()]
+
     if offsets_value:
-        offsets = [int(seg.strip()) for seg in offsets_value.split(",") if seg.strip()]
+        # Parse offsets list like "1 week, 2 days"
+        offsets = [
+            parse_duration_string(seg)
+            for seg in offsets_value.split(",")
+            if seg.strip()
+        ]
+
+        # If indices not provided, generate 1-based indices
+        if not indices:
+            indices = list(range(1, len(offsets) + 1))
+
     elif interval_value and count_value:
         interval = int(interval_value)
         count = int(count_value)
-        offsets = [interval * idx for idx in range(count)]
+        offsets = [timedelta(days=interval * i) for i in range(count)]
+        if not indices:
+            indices = list(range(1, count + 1))
     else:
         print("Series action needs either offsets or interval+count.")
         return
+
+    # Validate lengths match if both provided
+    if len(indices) != len(offsets):
+        print(f"Mismatch: {len(indices)} indices provided for {len(offsets)} offsets.")
+        # Truncate to shorter length to be safe? Or error? Let's error.
+        return
+
     target_verb = action.assignments.get("verb", "add")
     name_template = assignment.get("name", "series event {index}")
-    for idx, offset in enumerate(offsets, start=1):
-        event_date = base_date + timedelta(days=offset)
+
+    for i, offset in enumerate(offsets):
+        idx = indices[i]
+        # Apply direction (add if forward, subtract if backward)
+        # Note: offset is always positive duration, direction handles sign
+        if direction == 1:
+            event_date = base_date + offset
+        else:
+            event_date = base_date - offset
+
+        # Interpolate name
+        # Support both {index} and %idx styles
+        try:
+            final_name = name_template.replace("%idx", str(idx)).format(
+                index=idx, idx=idx, offset=offset, date=event_date.isoformat()
+            )
+        except Exception as e:
+            print(f"Error formatting name template '{name_template}': {e}")
+            final_name = name_template
+
         decorated = {
             **assignment,
             "date": event_date.isoformat(),
-            "name": name_template.format(
-                index=idx, offset=offset, date=event_date.isoformat()
-            ),
+            "name": final_name,
         }
+
+        # Remove start/end from decorated to avoid confusion in child action?
+        # Actually 'add' handler expects 'date', so we are good.
+
         child = DSLAction(verb=target_verb, assignments=decorated)
         handler = HANDLER_MAP.get(target_verb)
         if handler:
@@ -162,6 +234,19 @@ def handle_delete(
     if not events:
         print("No filtered events to delete; run 'events' first.")
         return
+
+    if context.dry_run:
+        print(
+            f"[Dry Run] Would delete {len(events)} events from {context.calendar_name}"
+        )
+        for event in events[:5]:  # Show first 5 as sample
+            print(
+                f"          - {event.get('summary', 'No Title')} ({event.get('start', {}).get('date') or event.get('start', {}).get('dateTime')})"
+            )
+        if len(events) > 5:
+            print(f"          ... and {len(events) - 5} more.")
+        return
+
     for event_data in events:
         event_id = event_data.get("id")
         if not event_id:
@@ -179,6 +264,12 @@ def handle_edit(
         print("No filtered events to edit; run 'events' first.")
         return
     assignment = action.assignments
+
+    if context.dry_run:
+        print(f"[Dry Run] Would edit {len(events)} events in {context.calendar_name}")
+        print(f"          Updates: {assignment}")
+        return
+
     for event_data in events:
         event_id = event_data.get("id")
         if not event_id:
@@ -194,51 +285,23 @@ def handle_edit(
             print(f"Updated event {event_id} in {context.calendar_name}")
 
 
-def handle_rules(
-    interpreter: "DSLInterpreter", action: DSLAction, context: ExecutionContext
-) -> None:
-    rule = interpreter.rules.get_rule(context.calendar_id)
-    recurrence = rule.get("recurrence", [])
-    reminders = [
-        str(reminder.get("minutes", 0)) for reminder in rule.get("reminders", [])
-    ]
-    print(
-        f"Rules for {context.calendar_name}: recurrence={recurrence} reminders={reminders}"
-    )
-
-
-def handle_set_rules(
-    interpreter: "DSLInterpreter", action: DSLAction, context: ExecutionContext
-) -> None:
-    assignment = action.assignments
-    recurrence_value = assignment.get("recurrence")
-    reminders_value = assignment.get("reminders")
-    template = assignment.get("description_template")
-    recurrence = normalize_recurrence(recurrence_value)
-    reminder_minutes = (
-        parse_reminder_minutes(reminders_value) if reminders_value else None
-    )
-    interpreter.rules.set_rule(
-        context.calendar_id,
-        context.calendar_name,
-        recurrence=recurrence or None,
-        reminder_minutes=reminder_minutes if reminder_minutes else None,
-        description_template=template,
-    )
-    print(f"Updated rules for {context.calendar_name}")
-
-
 def handle_create(
     interpreter: "DSLInterpreter", action: DSLAction, context: ExecutionContext
 ) -> None:
     assignment = action.assignments
-    name = assignment.get("name") or assignment.get("summary")
+    name = assignment.get("name") or assignment.get("summary") or context.calendar_name
     if not name:
-        print("Create action needs a calendar name via set name=...")
+        print("Create action needs a calendar name.")
         return
     tz = assignment.get("time_zone") or DEFAULT_TIMEZONE
+
+    if context.dry_run:
+        print(f"[Dry Run] Would create calendar '{name}' with time zone '{tz}'")
+        return
+
     calendar_id = interpreter.manager.ensure_calendar(name, time_zone=tz)
     if calendar_id:
+        context.calendar_id = calendar_id
         print(f"Created or found calendar {name}")
     else:
         print(f"Failed to create calendar {name}")
@@ -251,6 +314,11 @@ def handle_export(
     if not path:
         print("Export action needs a path (e.g. export to 'path.csv').")
         return
+
+    if context.dry_run:
+        print(f"[Dry Run] Would export events from {context.calendar_name} to {path}")
+        return
+
     interpreter.manager.export_to_csv(context.calendar_id, path)
     print(f"Exported {context.calendar_name} to {path}")
 
@@ -262,12 +330,16 @@ def handle_import(
     if not path:
         print("Import action needs a path (e.g. import from 'rows.csv').")
         return
-    rule = interpreter.rules.get_rule(context.calendar_id)
+
+    if context.dry_run:
+        print(f"[Dry Run] Would import events from {path} into {context.calendar_name}")
+        return
+
     interpreter.manager.import_from_csv(
         context.calendar_id,
         path,
-        recurrence=rule.get("recurrence"),
-        reminders=rule.get("reminders"),
+        recurrence=None,
+        reminders=None,
     )
     print(f"Imported events from {path} into {context.calendar_name}")
 
@@ -279,12 +351,18 @@ def handle_batch(
     if not path:
         print("Batch action needs a path to the CSV file.")
         return
-    rule = interpreter.rules.get_rule(context.calendar_id)
+
+    if context.dry_run:
+        print(
+            f"[Dry Run] Would process batch operations from {path} for {context.calendar_name}"
+        )
+        return
+
     interpreter.manager.batch_edit_from_csv(
         context.calendar_id,
         path,
-        recurrence=rule.get("recurrence"),
-        reminders=rule.get("reminders"),
+        recurrence=None,
+        reminders=None,
     )
     print(f"Processed batch CSV {path} for {context.calendar_name}")
 
@@ -304,9 +382,6 @@ HANDLER_MAP: Dict[str, HandlerFn] = {
     "series": handle_series,
     "delete": handle_delete,
     "edit": handle_edit,
-    "rules": handle_rules,
-    "set_rules": handle_set_rules,
-    "set-rules": handle_set_rules,
     "create": handle_create,
     "export": handle_export,
     "import": handle_import,

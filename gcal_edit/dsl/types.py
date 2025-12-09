@@ -21,6 +21,7 @@ class DSLBlock:
 
 @dataclass
 class ExecutionContext:
-    calendar_id: str
+    calendar_id: Optional[str]
     calendar_name: str
     filtered_events: List[Dict[str, Any]] = field(default_factory=list)
+    dry_run: bool = False

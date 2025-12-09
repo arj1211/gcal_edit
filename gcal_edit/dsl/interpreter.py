@@ -6,7 +6,6 @@ from typing import Dict, Optional
 from gcal_edit.dsl.handlers import HANDLER_MAP, HandlerFn
 from gcal_edit.dsl.parsing import parse_script
 from gcal_edit.dsl.types import DSLBlock, ExecutionContext
-from gcal_edit.service.calendar_rules import CalendarRulesManager
 from gcal_edit.service.calendar_service import (
     CalendarManager,
     authenticate_google_calendar,
@@ -14,20 +13,32 @@ from gcal_edit.service.calendar_service import (
 
 
 class DSLInterpreter:
-    def __init__(self) -> None:
-        service = authenticate_google_calendar()
-        self.manager = CalendarManager(service)
-        self.rules = CalendarRulesManager()
+    def __init__(
+        self,
+        manager: Optional[CalendarManager] = None,
+    ) -> None:
+        if manager:
+            self.manager = manager
+        else:
+            service = authenticate_google_calendar()
+            self.manager = CalendarManager(service)
+
         self.calendars = self.manager.list_calendars()
 
-    def run(self, script_path: Path) -> None:
+    def run(self, script_path: Path, dry_run: bool = False) -> None:
         for block in parse_script(script_path):
             calendar_id = self.resolve_calendar(block.calendar_name)
+
+            # If calendar not found, we only proceed if the first action is 'create'
             if not calendar_id:
-                print(f"Skipping block: calendar '{block.calendar_name}' not found")
-                continue
+                if not (block.actions and block.actions[0].verb == "create"):
+                    print(f"Skipping block: calendar '{block.calendar_name}' not found")
+                    continue
+
             context = ExecutionContext(
-                calendar_id=calendar_id, calendar_name=block.calendar_name
+                calendar_id=calendar_id,
+                calendar_name=block.calendar_name,
+                dry_run=dry_run,
             )
             for action in block.actions:
                 handler = self._get_handler(action.verb)

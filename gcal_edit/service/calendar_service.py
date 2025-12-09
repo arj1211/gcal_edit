@@ -10,26 +10,22 @@ from googleapiclient.discovery import Resource, build
 # Google Calendar API scopes
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 DEFAULT_TIMEZONE = "UTC"
-DEFAULT_REMINDERS = [
-    {"method": "popup", "minutes": 14 * 24 * 60},  # 2 weeks
-    {"method": "popup", "minutes": 2 * 24 * 60},  # 2 days
-    {"method": "popup", "minutes": 0},
-]
-DEFAULT_RECURRENCE = ["RRULE:FREQ=YEARLY"]
 
 
 def authenticate_google_calendar() -> Resource:
     creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
+    if os.path.exists("secrets/token.pickle"):
+        with open("secrets/token.pickle", "rb") as token:
             creds = pickle.load(token)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(
+                "secrets/credentials.json", SCOPES
+            )
             creds = flow.run_local_server(port=0)
-        with open("token.pickle", "wb") as token:
+        with open("secrets/token.pickle", "wb") as token:
             pickle.dump(creds, token)
     return build("calendar", "v3", credentials=creds)
 
@@ -93,29 +89,6 @@ class CalendarManager:
             items_key="items",
             **{k: v for k, v in params.items() if v is not None},
         )
-
-    def list_calendars_incremental(
-        self,
-        sync_token: str,
-        *,
-        min_access_role: Optional[str] = None,
-        show_hidden: bool = False,
-        show_deleted: bool = False,
-        time_zone: Optional[str] = None,
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        params: Dict[str, Any] = {
-            "syncToken": sync_token,
-            "minAccessRole": min_access_role,
-            "showHidden": show_hidden,
-            "showDeleted": show_deleted,
-            "timeZone": time_zone,
-        }
-        response = (
-            self.service.calendarList()
-            .list(**{k: v for k, v in params.items() if v is not None})
-            .execute()
-        )
-        return response.get("items", []), response.get("nextSyncToken")
 
     def get_calendar_by_name(self, name: str) -> Optional[Dict[str, Any]]:
         try:
@@ -278,8 +251,8 @@ class CalendarManager:
             summary=summary,
             date=date,
             description=description,
-            recurrence=recurrence or DEFAULT_RECURRENCE,
-            reminders=reminders or DEFAULT_REMINDERS,
+            recurrence=recurrence,
+            reminders=reminders,
         )
         try:
             created_event = (

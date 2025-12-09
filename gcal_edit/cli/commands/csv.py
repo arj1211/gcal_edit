@@ -18,12 +18,11 @@ def handle_import(cli: "CalendarCLI", args: List[str]) -> None:
     if not cli.require_calendar():
         return
     path = args[0] if args else cli.prompt_field("Import path", "special_dates.csv")
-    rule = cli.rules.get_rule(cli.selected_calendar_id)
     stats = cli.manager.import_from_csv(
         cli.selected_calendar_id,
         path,
-        recurrence=rule.get("recurrence"),
-        reminders=rule.get("reminders"),
+        recurrence=None,
+        reminders=None,
     )
     print(f"Import added={stats['added']} skipped={stats['skipped']}")
 
@@ -32,12 +31,11 @@ def handle_batch(cli: "CalendarCLI", args: List[str]) -> None:
     if not cli.require_calendar():
         return
     path = args[0] if args else cli.prompt_field("Batch file path", "batch_edits.csv")
-    rule = cli.rules.get_rule(cli.selected_calendar_id)
     stats = cli.manager.batch_edit_from_csv(
         cli.selected_calendar_id,
         path,
-        recurrence=rule.get("recurrence"),
-        reminders=rule.get("reminders"),
+        recurrence=None,
+        reminders=None,
     )
     print(
         f"Batch add={stats['added']} update={stats['updated']} delete={stats['deleted']} skipped={stats['skipped']}"

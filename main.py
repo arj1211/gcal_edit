@@ -14,12 +14,17 @@ def main() -> None:
         nargs="+",
         help="Path to one or more DSL scripts",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate actions without modifying calendars",
+    )
     args = parser.parse_args()
     if args.script:
         interpreter = DSLInterpreter()
         for script_path in args.script:
             try:
-                interpreter.run(script_path)
+                interpreter.run(script_path, dry_run=args.dry_run)
             except FileNotFoundError:
                 print(f"Script file not found: {script_path}")
             except Exception as exc:

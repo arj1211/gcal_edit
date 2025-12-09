@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 from gcal_edit.cli.command_router import COMMAND_HANDLERS
 from gcal_edit.dsl import DSLInterpreter
-from gcal_edit.service.calendar_rules import CalendarRulesManager
 from gcal_edit.service.calendar_service import (
     CalendarManager,
     authenticate_google_calendar,
@@ -20,13 +19,12 @@ class CalendarCLI:
     def __init__(self) -> None:
         service = authenticate_google_calendar()
         self.manager = CalendarManager(service)
-        self.rules = CalendarRulesManager()
         self.calendars: List[Dict[str, Any]] = []
         self.selected_calendar_id: Optional[str] = None
         self.selected_calendar_name: str = ""
         self.events: List[Dict[str, Any]] = []
         self.last_command_remainder: str = ""
-        self.dsl = DSLInterpreter()
+        self.dsl = DSLInterpreter(manager=self.manager)
         self.refresh_calendar_list()
 
     def refresh_calendar_list(self) -> None:

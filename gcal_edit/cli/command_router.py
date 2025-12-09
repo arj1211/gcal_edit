@@ -13,7 +13,6 @@ from gcal_edit.cli.commands.event_crud import (
 )
 from gcal_edit.cli.commands.events import handle_events
 from gcal_edit.cli.commands.help import handle_help
-from gcal_edit.cli.commands.rules import handle_rules, handle_set_rules
 from gcal_edit.cli.commands.script import handle_script
 
 if TYPE_CHECKING:
@@ -27,8 +26,6 @@ COMMANDS: Dict[str, str] = {
     "edit": "Edit an existing event",
     "delete": "Delete an event",
     "transfer": "Transfer an event to another calendar",
-    "rules": "Show the current calendar's rule set",
-    "set-rules": "Update recurrence/reminders for the selected calendar",
     "export": "Export events to CSV",
     "import": "Import events from CSV",
     "batch": "Run a batch CSV action",
@@ -48,8 +45,6 @@ COMMAND_HANDLERS: Dict[str, Handler] = {
     "edit": handle_edit,
     "delete": handle_delete,
     "transfer": handle_transfer,
-    "rules": handle_rules,
-    "set-rules": handle_set_rules,
     "export": handle_export,
     "import": handle_import,
     "batch": handle_batch,
