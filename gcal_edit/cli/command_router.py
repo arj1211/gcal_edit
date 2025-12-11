@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, List
+from typing import Callable, Dict, List
 
 from gcal_edit.cli.commands.calendars import handle_calendars, handle_select
 from gcal_edit.cli.commands.create import handle_create
@@ -14,9 +14,6 @@ from gcal_edit.cli.commands.event_crud import (
 from gcal_edit.cli.commands.events import handle_events
 from gcal_edit.cli.commands.help import handle_help
 from gcal_edit.cli.commands.script import handle_script
-
-if TYPE_CHECKING:
-    from gcal_edit.cli.calendar_cli import CalendarCLI
 
 COMMANDS: Dict[str, str] = {
     "calendars": "List available calendars",
