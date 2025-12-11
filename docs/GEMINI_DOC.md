@@ -89,8 +89,4 @@ To turn this "half-baked" project into the "final real thing", I propose the fol
 - **CLI Unification:** Refactored `CalendarCLI` to delegate `add`, `edit`, `delete`, `transfer`, and `create` commands to the corresponding DSL handlers. This ensures that logic improvements (like Dry Run support or rule application) benefit both interfaces.
 
 
-## Decisions Log
-- **Syntax:** We are sticking with the current pipe-based syntax (`| set`, `| where`) as it is functional and readable.
-- **Series:** We will use a functional and sensible syntax for series, likely building on the current implementation but ensuring it covers the use cases.
-- **Dry Run:** Implemented as a global flag (`--dry-run`) that prevents write operations to the API and prints simulation messages instead.
 
