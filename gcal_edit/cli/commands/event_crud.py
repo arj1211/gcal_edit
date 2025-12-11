@@ -15,7 +15,6 @@ from gcal_edit.dsl.handlers import (
     handle_transfer as dsl_transfer,
 )
 from gcal_edit.dsl.types import DSLAction, ExecutionContext
-from gcal_edit.service.calendar_service import DEFAULT_TIMEZONE
 
 if TYPE_CHECKING:
     from gcal_edit.cli.calendar_cli import CalendarCLI
