@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 from gcal_edit.dsl.interpreter import DSLInterpreter
 
