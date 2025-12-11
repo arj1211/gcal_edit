@@ -40,7 +40,7 @@ calendar[CalA] > events
 ```
 
 ```
-# newlines dont matter. example of transferring all anniversaries/birthdays from CalA to SpecialCal and applying a yearly recurrence rule and reminders one week and one day before the event.
+# newlines don't matter. example of transferring all anniversaries/birthdays from CalA to SpecialCal and applying a yearly recurrence rule and reminders one week and one day before the event.
 
 calendar[CalA] > events 
     | where (name match '(?i)anniversary' or name match '(?i)birthday')
