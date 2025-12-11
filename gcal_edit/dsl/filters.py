@@ -121,7 +121,7 @@ def _split_respecting_parens(text: str, separator: str) -> List[str]:
 def _build_event_clause_filter(clause: str) -> Optional[FilterFn]:
     clause = clause.strip()
     match = re.match(
-        r"^(?P<field>\w+)\s*(?P<op><=|>=|!=|=|<|>|match)\s*(?P<value>.+)$",
+        r"^(?P<field>\w+)\s*(?P<op><=|>=|!=|=|<|>|match|contains)\s*(?P<value>.+)$",
         clause,
         re.IGNORECASE,
     )
@@ -144,6 +144,9 @@ def _build_event_clause_filter(clause: str) -> Optional[FilterFn]:
         return lambda event, field=field, pattern=pattern: bool(
             pattern.search(_get_event_field_value(event, field))
         )
+
+    if op == "contains":
+        return lambda event, field=field, value=value: value.lower() in _get_event_field_value(event, field).lower()
 
     def comparator(event: Dict[str, Any], field=field, value=value) -> bool:
         actual = _get_event_field_value(event, field)
@@ -194,7 +197,7 @@ def _get_event_field_value(event: Dict[str, Any], field: str) -> str:
     if normalized in {"name", "summary", "title"}:
         return event.get("summary", "") or ""
     if normalized == "description":
-        return event.get("description", "")
+        return event.get("description", "") or ""
     if normalized in {"location", "venue"}:
         return event.get("location", "") or ""
     if normalized in {"id", "event_id"}:

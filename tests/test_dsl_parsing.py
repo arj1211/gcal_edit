@@ -130,6 +130,61 @@ class TestDSLFilters(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["start"]["date"], "2025-01-01")
 
+    def test_contains_operator(self):
+        events = [
+            {"summary": "Birthday Anniversary"},
+            {"summary": "Work Meeting"},
+            {"summary": "Anniversary Party"},
+            {"summary": "Birthday Celebration"},
+        ]
+        # Filter: name contains 'anniversary'
+        filtered = filter_events(events, "name contains 'anniversary'")
+        self.assertEqual(len(filtered), 2)
+        summaries = [e["summary"] for e in filtered]
+        self.assertIn("Birthday Anniversary", summaries)
+        self.assertIn("Anniversary Party", summaries)
+
+        # Filter: name contains 'birthday'
+        filtered = filter_events(events, "name contains 'birthday'")
+        self.assertEqual(len(filtered), 2)
+        summaries = [e["summary"] for e in filtered]
+        self.assertIn("Birthday Anniversary", summaries)
+        self.assertIn("Birthday Celebration", summaries)
+
+        # Filter: name contains 'anniversary' or name contains 'birthday'
+        filtered = filter_events(events, "name contains 'anniversary' or name contains 'birthday'")
+        self.assertEqual(len(filtered), 3)
+
+    def test_contains_operator_edge_cases(self):
+        events = [
+            {"summary": "Birthday Anniversary"},
+            {"summary": "Work Meeting"},
+            {},  # Event with no summary field
+            {"summary": ""},  # Event with empty summary
+            {"summary": None},  # Event with None summary
+        ]
+        # Filter: name contains 'anniversary'
+        # Should only match the first event and not crash on missing/empty/None
+        filtered = filter_events(events, "name contains 'anniversary'")
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["summary"], "Birthday Anniversary")
+
+        # Verify that events without matching text are excluded
+        filtered = filter_events(events, "name contains 'anniversary'")
+        summaries = [e.get("summary") for e in filtered]
+        self.assertNotIn("Work Meeting", summaries)
+
+        # Test with description field that might be None
+        events_with_desc = [
+            {"summary": "Event1", "description": "Contains keyword"},
+            {"summary": "Event2", "description": None},
+            {"summary": "Event3"},  # No description field
+            {"summary": "Event4", "description": ""},
+        ]
+        filtered = filter_events(events_with_desc, "description contains 'keyword'")
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["summary"], "Event1")
+
 
 if __name__ == "__main__":
     unittest.main()
