@@ -134,4 +134,4 @@ def handle_transfer(cli: "CalendarCLI", args: List[str]) -> None:
         filtered_events=[event],
     )
     dsl_transfer(cli.dsl, action, context)
-    print("Event transferred." if new_id else "Transfer failed.")
+    print("Event transferred.")
