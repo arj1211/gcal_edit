@@ -197,7 +197,7 @@ def _get_event_field_value(event: Dict[str, Any], field: str) -> str:
     if normalized in {"name", "summary", "title"}:
         return event.get("summary", "") or ""
     if normalized == "description":
-        return event.get("description", "")
+        return event.get("description", "") or ""
     if normalized in {"location", "venue"}:
         return event.get("location", "") or ""
     if normalized in {"id", "event_id"}:
