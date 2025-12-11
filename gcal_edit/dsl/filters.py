@@ -191,29 +191,14 @@ def _get_event_field_value(event: Dict[str, Any], field: str) -> str:
             or event.get("end", {}).get("date", "")
             or ""
         )
-    if normalized == "name":
-        return event.get("summary", "")
-    if normalized == "description":
-        return event.get("description", "")
-    if normalized == "location":
-        return event.get("location", "")
-    if normalized == "id":
-        return event.get("id", "")
-
-    return str(event.get(field, ""))
-
-    if normalized in {"end", "end_date"}:
-        return (
-            event.get("end", {}).get("dateTime")
-            or event.get("end", {}).get("date", "")
-            or ""
-        )
     if normalized in {"name", "summary", "title"}:
         return event.get("summary", "") or ""
-    if normalized == "recurrence":
-        return ", ".join(event.get("recurrence", []))
+    if normalized == "description":
+        return event.get("description", "")
     if normalized in {"location", "venue"}:
         return event.get("location", "") or ""
     if normalized in {"id", "event_id"}:
         return event.get("id", "") or ""
+    if normalized == "recurrence":
+        return ", ".join(event.get("recurrence", []))
     return str(event.get(field, ""))
