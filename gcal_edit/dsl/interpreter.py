@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from gcal_edit.dsl.handlers import HANDLER_MAP, HandlerFn
 from gcal_edit.dsl.parsing import parse_script
