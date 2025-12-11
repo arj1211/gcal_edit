@@ -16,7 +16,7 @@ Requirements for what I need to be able to do:
 I want to be able to do some complex stuff like:
 - set a reminder rule for a calendar, and then assert all events on that calendar follow that reminder rule (or coerce them to if they don't)
 - set up a series of 8 named checkpoints (like 'Checkpoint {i}/8') starting on friday and spaced 3 weeks apart, and set a 3 day reminder for each
-- create a calendar called "Birthdays" if it doesn't exist, set its default notification/reminders to 2 weeks before event & on day of event. Then transfer all events with "Birthday" in the name across all OTHER calendars to the Birthday calendar, and set every event on the Birthday calendar to recurr yearly
+- create a calendar called "Birthdays" if it doesn't exist, set its default notification/reminders to 2 weeks before event & on day of event. Then transfer all events with "Birthday" in the name across all OTHER calendars to the Birthday calendar, and set every event on the Birthday calendar to recur yearly
 
 
 Heres some script examples of what I want to be able to do

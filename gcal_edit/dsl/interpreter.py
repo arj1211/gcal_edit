@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from gcal_edit.dsl.handlers import HANDLER_MAP, HandlerFn
 from gcal_edit.dsl.parsing import parse_script
-from gcal_edit.dsl.types import DSLBlock, ExecutionContext
+from gcal_edit.dsl.types import ExecutionContext
 from gcal_edit.service.calendar_service import (
     CalendarManager,
     authenticate_google_calendar,
