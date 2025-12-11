@@ -1,5 +1,4 @@
 import unittest
-from datetime import date, timedelta
 from unittest.mock import MagicMock, call
 
 from gcal_edit.dsl.handlers import (
