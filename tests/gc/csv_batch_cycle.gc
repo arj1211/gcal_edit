@@ -1,0 +1,18 @@
+# CSV/batch loop + cleanup (ID columns assumed) 
+# - export existing sandbox events
+# - create a batch template with add/update/delete rows, run batch
+# - re-export to confirm, then delete
+calendar['gcal-edit-sandbox'] > export to 'sandbox_export.csv'
+
+# simulate editing through CLI/manually updated CSV (pseudocode block)
+# (Users would edit sandbox_batch.csv manually before running again)
+
+# Run import and ensure cleanup
+calendar['gcal-edit-sandbox'] > import from 'sandbox_export.csv'
+  | set reminders = 1 day
+> batch
+  | set path = 'sandbox_export.csv'
+> delete
+calendar['gcal-edit-sandbox'] > events
+  | where start >= 2025-01-01
+> delete
