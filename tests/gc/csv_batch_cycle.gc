@@ -7,7 +7,7 @@ calendar['gcal-edit-sandbox'] > export to 'sandbox_export.csv'
 # simulate editing through CLI/manually updated CSV (pseudocode block)
 # (Users would edit sandbox_batch.csv manually before running again)
 
-# Run import with existing rules and ensure cleanup
+# Run import and ensure cleanup
 calendar['gcal-edit-sandbox'] > import from 'sandbox_export.csv'
   | set reminders = 1 day
 > batch
