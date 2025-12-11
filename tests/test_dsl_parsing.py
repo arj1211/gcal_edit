@@ -4,7 +4,6 @@ from unittest.mock import mock_open, patch
 
 from gcal_edit.dsl.filters import filter_events
 from gcal_edit.dsl.parsing import _strip_literal_value, parse_action_line, parse_script
-from gcal_edit.dsl.types import DSLAction, DSLBlock
 
 
 class TestDSLParsing(unittest.TestCase):
