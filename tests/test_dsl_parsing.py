@@ -130,6 +130,31 @@ class TestDSLFilters(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["start"]["date"], "2025-01-01")
 
+    def test_contains_operator(self):
+        events = [
+            {"summary": "Birthday Anniversary"},
+            {"summary": "Work Meeting"},
+            {"summary": "Anniversary Party"},
+            {"summary": "Birthday Celebration"},
+        ]
+        # Filter: name contains 'anniversary'
+        filtered = filter_events(events, "name contains 'anniversary'")
+        self.assertEqual(len(filtered), 2)
+        summaries = [e["summary"] for e in filtered]
+        self.assertIn("Birthday Anniversary", summaries)
+        self.assertIn("Anniversary Party", summaries)
+
+        # Filter: name contains 'birthday'
+        filtered = filter_events(events, "name contains 'birthday'")
+        self.assertEqual(len(filtered), 2)
+        summaries = [e["summary"] for e in filtered]
+        self.assertIn("Birthday Anniversary", summaries)
+        self.assertIn("Birthday Celebration", summaries)
+
+        # Filter: name contains 'anniversary' or name contains 'birthday'
+        filtered = filter_events(events, "name contains 'anniversary' or name contains 'birthday'")
+        self.assertEqual(len(filtered), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
