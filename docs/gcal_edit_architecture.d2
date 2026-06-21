@@ -1,0 +1,101 @@
+direction: down
+
+entry: {
+  label: "Entry point\n(main.py / python -m gcal_edit)"
+}
+
+auth: {
+  label: "authenticate_google_calendar()\ncredentials.json & token.pickle"
+}
+
+entry -> auth
+entry -> cli: "interactive (no -f/--script)"
+entry -> script: "DSL files (-f/--script)"
+
+cli: {
+  label: "CalendarCLI\ninteractive prompt"
+}
+
+script: {
+  label: "DSLInterpreter\nscript runner"
+}
+
+entry -> cli
+entry -> script
+cli -> router: "command router"
+router: {
+  label: "COMMAND_HANDLERS"
+}
+router -> commands: "maps verbs to handlers"
+commands: {
+  label: "gcal_edit/cli/commands\ncalendars/events/add/delete/transfer/rules/create/csv/script"
+}
+
+cli -> filters: "events command uses"
+filters: {
+  label: "gcal_edit/dsl/filters.py\nfilter_events"
+}
+
+cli -> dsl_bridge: "script command"
+dsl_bridge: {
+  label: "bridge to DSL interpreter"
+}
+dsl_bridge -> script
+
+script -> parser: "parse .gc files"
+parser: {
+  label: "gcal_edit/dsl/parsing.py\ncalendar selectors + filters"
+}
+
+script -> types: "DSLAction / DSLBlock / ExecutionContext"
+types: {
+  label: "gcal_edit/dsl/types.py"
+}
+
+script -> handlers: "HANDLER_MAP" 
+handlers: {
+  label: "gcal_edit/dsl/handlers.py\nverbs: events/transfer/add/series/delete/edit/rules/set-rules/create/export/import/batch"
+}
+
+handlers -> helpers: "recurrence & reminder helpers"
+helpers: {
+  label: "gcal_edit/dsl/helpers.py"
+}
+
+handlers -> filters
+handlers -> manager
+handlers -> rules
+
+manager: {
+  label: "CalendarManager\nGoogle Calendar API + pandas for CSV"
+}
+manager -> google: "uses Google Calendar API"
+google: {
+  label: "https://www.googleapis.com/auth/calendar"
+}
+manager -> pandas: "CSV workflows"
+pandas: {
+  label: "pandas"
+}
+
+rules: {
+  label: "CalendarRulesManager\ncalendar_rules.json"
+}
+
+handlers -> google
+handlers -> pandas
+handlers -> types
+
+commands -> manager
+commands -> rules
+commands -> csv
+
+csv: {
+  label: "special_dates.csv / exports.csv"
+}
+csv -> manager
+
+tests: {
+  label: "tests/gc/*.gc\ndsl scripts"
+}
+tests -> parser

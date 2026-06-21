@@ -1,0 +1,39 @@
+# Example of transferring all events in 2023 from Default calendar to another calendar
+calendar['Default'] > events
+  | where start >= 2023-01-01
+  | where end <= 2023-12-31
+> transfer to calendar['Archive_2023']
+
+# Example of transferring all anniversaries/birthdays from Default calendar to 'Special Dates' calendar and applying a recurrence rule of FREQ=YEARLY and reminders one week and one day before the event
+calendar['Default'] > events
+  | where name contains 'anniversary' or name contains 'birthday'
+> transfer to calendar['Special Dates']
+  | set recurrence = yearly
+  | set reminders = 1 week, 1 day
+
+# Example of adding recurring events with names according to a pattern in Default calendar with a recurrence rule of FREQ=DAILY only on weekdays every other month and reminders one week and one day before the event
+calendar['Default'] > add
+  | set name = '^Weekly Meeting \d+$'
+  | set recurrence = 'RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR;INTERVAL=2;BYMONTH=1,3,5,7,9,11'
+  | set reminders = 1 week, 1 day
+
+# Delete events matching a quick filter (run events first to populate the context).
+calendar['Default'] > events
+  | where name contains 'obsolete'
+> delete
+
+# Edit filtered events so they share the same description template.
+calendar['Default'] > events
+  | where name contains 'Weekly Meeting'
+> edit
+  | set description = 'Standing team sync managed via DSL'
+
+
+# Anniversary milestones expressed as a `series` statement that expands into add actions.
+# Provide offsets (days after 2000-01-01) and let the DSL generate the events.
+calendar['Default'] > series
+  | set start = 2000-01-01
+  | set offsets = 10, 50, 100, 200, 500, 1000, 2000, 5000, 10000
+  | set name = '{offset}-day anniversary since 2000-01-01'
+  | set recurrence = yearly
+  | set reminders = 1 week, 1 day

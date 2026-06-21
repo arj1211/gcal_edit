@@ -1,4 +1,9 @@
 __pycache__/*
+*__pycache__
 credentials.json
 *.pickle
 *.csv
+*.egg-info/
+build/
+dist/
+*.log

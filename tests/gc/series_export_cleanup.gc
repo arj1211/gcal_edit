@@ -1,0 +1,21 @@
+# Series + export/test cleanup
+# - create a 5-day streak via `series`
+# - export the resulting rows to CSV
+# - delete the generated events
+# - re-import so the scheduler can verify import/export symmetry
+# - finally delete again to reset state
+calendar['gcal-edit-sandbox'] > series
+  | set start = 2025-12-01
+  | set offsets = 0,1,2,3,4
+  | set name = 'DSL Series Day {index}'
+  | set recurrence = yearly
+  | set reminders = 1 week, 1 day
+  | set verb = add
+> events
+  | where name contains 'DSL Series Day'
+> export to 'series_export.csv'
+> delete
+> import from 'series_export.csv'
+calendar['gcal-edit-sandbox'] > events
+  | where name contains 'DSL Series Day'
+> delete

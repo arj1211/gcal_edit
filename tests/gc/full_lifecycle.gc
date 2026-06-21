@@ -1,0 +1,22 @@
+calendar['Test Sandbox'] > create
+    | set time_zone = "UTC"
+
+calendar['Test Sandbox'] > add
+    | set name = "Integration Test Event"
+    | set date = "2025-06-01"
+    | set description = "Created by integration test"
+
+calendar['Test Sandbox'] > events
+    | where name match 'Integration Test Event'
+> edit
+    | set description = "Updated description"
+    | set recurrence = "RRULE:FREQ=YEARLY"
+
+calendar['Test Sandbox'] > events
+    | where name match 'Integration Test Event'
+> transfer calendar['Test Archive']
+    | set delete_source = true
+
+calendar['Test Archive'] > events
+    | where name match 'Integration Test Event'
+> delete
